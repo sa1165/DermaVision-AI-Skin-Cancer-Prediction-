@@ -81,9 +81,16 @@ app = FastAPI(
 )
 
 # Enable CORS to allow frontend requests
+origins = [
+    "https://resonant-choux-319363.netlify.app",  # Live Netlify frontend
+    "http://localhost:5500",                      # Local development (VS Code Live Server)
+    "http://127.0.0.1:5500",                      # Local development
+    "http://localhost:8000",                     # Local backend testing
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (change to specific domain in production)
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
