@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DermaVision - Skin Lesion Classifier</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- ================== SAFETY NOTICE MODAL ================== -->
+    <div id="safetyModal" class="modal modal-active">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-warning-icon">⚠️</div>
+                <h1>Important Safety Notice</h1>
+                <p>Please read before using DermaVision</p>
+            </div>
+
+            <div class="modal-body">
+                <div class="modal-section critical">
+                    <div class="section-icon">🚫</div>
+                    <h2>This is NOT a medical device</h2>
+                    <p>DermaVision is a research and educational tool only. It cannot and should not be used for medical diagnosis or treatment decisions.</p>
+                </div>
+
+                <div class="modal-section">
+                    <div class="section-icon">🔬</div>
+                    <p><strong>Results are predictions from a machine learning model, not medical advice</strong></p>
+                </div>
+
+                <div class="modal-section">
+                    <div class="section-icon">⚠️</div>
+                    <p>Low confidence results should especially not be relied upon</p>
+                </div>
+
+                <div class="modal-section">
+                    <div class="section-icon">👨‍⚕️</div>
+                    <p>Always consult a qualified dermatologist for any skin concerns</p>
+                </div>
+
+                <div class="modal-section">
+                    <div class="section-icon">🩺</div>
+                    <p>Early detection saves lives – see a doctor if you notice any changes</p>
+                </div>
+
+                <div class="modal-acceptance">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="acceptCheckbox">
+                        <span class="checkmark"></span>
+                        <span>I understand this is <strong>not a diagnostic tool</strong> and I will consult a doctor for any skin concerns.</span>
+                    </label>
+                </div>
+            </div>
+
+            <button id="continueBtn" class="modal-btn" disabled>Continue to DermaVision</button>
+        </div>
+    </div>
+
+    <!-- ================== MAIN APPLICATION ================== -->
+    <div id="mainApp" class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="app-title">
+                    <span class="app-logo">🔬</span>
+                    <div>
+                        <h1>DermaVision</h1>
+                        <p>Research & Education Only</p>
+                    </div>
+                </div>
+                <div class="header-controls">
+                    <button id="themeToggle" class="theme-btn" title="Toggle theme">🌙</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="analyze">
+                <span class="tab-icon">📤</span>
+                <span>Analyze</span>
+            </button>
+            <button class="nav-tab" data-tab="learn">
+                <span class="tab-icon">📚</span>
+                <span>Learn</span>
+            </button>
+        </nav>
+
+        <!-- Disclaimer Banner -->
+        <div class="disclaimer-banner">
+            <span>⚠️</span>
+            <strong>Research & Educational Tool Only</strong>
+            <span>DermaVision is NOT a medical device and cannot be used for diagnosis. Always consult a healthcare professional for medical advice.</span>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- ================== ANALYZE TAB ================== -->
+            <section id="analyzeTab" class="tab-content active">
+                <div class="analyze-container">
+                    <!-- Left: Upload & Image Preview -->
+                    <div class="upload-section">
+                        <div class="upload-box" id="uploadBox">
+                            <div class="upload-icon">📤</div>
+                            <h2>Upload a skin lesion image</h2>
+                            <p>Drag and drop or click to browse</p>
+                            <p class="upload-formats">Supports: JPG, PNG, WebP</p>
+                            <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp" style="display: none;">
+                        </div>
+
+                        <!-- Image Preview -->
+                        <div id="imagePreview" class="image-preview hidden">
+                            <img id="previewImg" src="" alt="Preview">
+                            <div class="preview-overlay">
+                                <button id="removeImageBtn" class="btn-remove">✕</button>
+                            </div>
+                        </div>
+
+                        <!-- Loading Spinner -->
+                        <div id="loadingSpinner" class="loading-spinner hidden">
+                            <div class="spinner"></div>
+                            <p>Analyzing image...</p>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="action-buttons">
+                            <button id="analyzeBtn" class="btn btn-primary" disabled>
+                                <span class="btn-icon">🔍</span>
+                                <span>Analyze Lesion</span>
+                            </button>
+                            <button id="clearBtn" class="btn btn-secondary">
+                                <span class="btn-icon">🗑️</span>
+                                <span>Clear All</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Prediction Result & History -->
+                    <div class="result-section">
+                        <!-- Prediction Result -->
+                        <div id="predictionResult" class="prediction-card hidden">
+                            <div class="result-header">
+                                <h2>Prediction Result</h2>
+                                <span class="close-result">✕</span>
+                            </div>
+
+                            <div class="result-main">
+                                <div class="result-class" id="resultClass">
+                                    <!-- Will be populated by JS -->
+                                </div>
+
+                                <div class="result-confidence">
+                                    <div class="confidence-bar">
+                                        <div class="confidence-fill" id="confidenceFill"></div>
+                                    </div>
+                                    <p id="confidenceText"></p>
+                                </div>
+
+                                <div class="confidence-band">
+                                    <span id="confidenceBand"></span>
+                                </div>
+                            </div>
+
+                            <!-- Probabilities -->
+                            <div class="probabilities">
+                                <div class="prob-item">
+                                    <span class="prob-label">Benign</span>
+                                    <div class="prob-bar">
+                                        <div class="prob-fill benign" id="probBenign"></div>
+                                    </div>
+                                    <span class="prob-value" id="probBenignValue">0%</span>
+                                </div>
+                                <div class="prob-item">
+                                    <span class="prob-label">Malignant</span>
+                                    <div class="prob-bar">
+                                        <div class="prob-fill malignant" id="probMalignant"></div>
+                                    </div>
+                                    <span class="prob-value" id="probMalignantValue">0%</span>
+                                </div>
+                            </div>
+
+                            <!-- Info Card -->
+                            <div id="infoCard" class="info-card">
+                                <!-- Will be populated by JS -->
+                            </div>
+
+                            <!-- Inference Time -->
+                            <div class="inference-time">
+                                <small>⏱️ Inference time: <span id="inferenceTime">0</span>ms</small>
+                            </div>
+                        </div>
+
+                        <!-- Session History -->
+                        <div class="session-history">
+                            <h3>📋 Session History</h3>
+                            <div id="historyList" class="history-list">
+                                <p class="history-empty">No predictions yet. Upload an image to get started.</p>
+                            </div>
+                            <button id="clearHistoryBtn" class="btn-clear-history" style="display: none;">Clear History</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================== LEARN TAB ================== -->
+            <section id="learnTab" class="tab-content">
+                <div class="learn-container">
+                    <h1>Skin Lesion Classification Guide</h1>
+                    <p class="learn-intro">Educational information about different types of skin lesions</p>
+
+                    <!-- BENIGN LESIONS -->
+                    <div class="lesion-category">
+                        <h2 class="category-title benign-category">
+                            <span class="category-badge">✓</span> Benign Lesions
+                        </h2>
+
+                        <div class="lesions-grid">
+                            <!-- AKIEC -->
+                            <div class="lesion-card benign">
+                                <div class="lesion-header">
+                                    <span class="lesion-code">AKIEC</span>
+                                    <span class="lesion-badge benign">Benign</span>
+                                </div>
+                                <h3>Actinic Keratosis</h3>
+                                <p>Rough, scaly patches caused by years of sun exposure.</p>
+                                <ul>
+                                    <li>Precancerous condition that may develop into squamous cell carcinoma</li>
+                                    <li>Commonly appears on sun-exposed areas like face, ears, and hands</li>
+                                    <li>Usually rough or scaly to the touch</li>
+                                </ul>
+                            </div>
+
+                            <!-- BKL -->
+                            <div class="lesion-card benign">
+                                <div class="lesion-header">
+                                    <span class="lesion-code">BKL</span>
+                                    <span class="lesion-badge benign">Benign</span>
+                                </div>
+                                <h3>Benign Keratosis</h3>
+                                <p>Non-cancerous skin growths that appear with age.</p>
+                                <ul>
+                                    <li>Includes seborrheic keratoses and other benign growths</li>
+                                    <li>Generally harmless and does not require treatment</li>
+                                    <li>Can be removed for cosmetic reasons if desired</li>
+                                </ul>
+                            </div>
+
+                            <!-- DF -->
+                            <div class="lesion-card benign">
+                                <div class="lesion-header">
+                                    <span class="lesion-code">DF</span>
+                                    <span class="lesion-badge benign">Benign</span>
+                                </div>
+                                <h3>Dermatofibroma</h3>
+                                <p>Common benign skin nodules of unknown cause.</p>
+                                <ul>
+                                    <li>Harmless, firm nodules typically found on legs</li>
+                                    <li>Usually brownish in color and small in size</li>
+                                    <li>May persist for years but pose no health risk</li>
+                                </ul>
+                            </div>
+
+                            <!-- NV -->
+                            <div class="lesion-card benign">
+                                <div class="lesion-header">
+                                    <span class="lesion-code">NV</span>
+                                    <span class="lesion-badge benign">Benign</span>
+                                </div>
+                                <h3>Melanocytic Nevus</h3>
+                                <p>Common moles, usually benign skin growths.</p>
+                                <ul>
+                                    <li>Usually round or oval with even coloring</li>
+                                    <li>Most people have many nevi that are harmless</li>
+                                    <li>Should be monitored for any changes</li>
+                                </ul>
+                            </div>
+
+                            <!-- VASC -->
+                            <div class="lesion-card benign">
+                                <div class="lesion-header">
+                                    <span class="lesion-code">VASC</span>
+                                    <span class="lesion-badge benign">Benign</span>
+                                </div>
+                                <h3>Vascular Lesion</h3>
+                                <p>Abnormalities of blood vessels in the skin.</p>
+                                <ul>
+                                    <li>Includes cherry angiomas, hemangiomas, and similar conditions</li>
+                                    <li>Usually benign and primarily a cosmetic concern</li>
+                                    <li>May appear red, purple, or blue in color</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MALIGNANT LESIONS -->
+                    <div class="lesion-category">
+                        <h2 class="category-title malignant-category">
+                            <span class="category-badge">⚠️</span> Malignant Lesions
+                        </h2>
+
+                        <div class="lesions-grid">
+                            <!-- BCC -->
+                            <div class="lesion-card malignant">
+                                <div class="lesion-header">
+                                    <span class="lesion-code">BCC</span>
+                                    <span class="lesion-badge malignant">Malignant</span>
+                                </div>
+                                <h3>Basal Cell Carcinoma</h3>
+                                <p>The most common type of skin cancer, usually slow-growing.</p>
+                                <ul>
+                                    <li>Most common form of skin cancer, but rarely spreads</li>
+                                    <li>Often appears as a pearly or waxy bump</li>
+                                    <li>May look like a flat, flesh-colored or brown scar-like lesion</li>
+                                </ul>
+                            </div>
+
+                            <!-- MEL -->
+                            <div class="lesion-card malignant">
+                                <div class="lesion-header">
+                                    <span class="lesion-code">MEL</span>
+                                    <span class="lesion-badge malignant">Malignant</span>
+                                </div>
+                                <h3>Melanoma</h3>
+                                <p>The most serious type of skin cancer. Early detection is critical.</p>
+                                <ul>
+                                    <li>Most dangerous form of skin cancer if caught early</li>
+                                    <li>Look for asymmetry, irregular borders, uneven color, large diameter</li>
+                                    <li>Can spread to other parts of the body if untreated</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ABCDE Rule -->
+                    <div class="abcde-section">
+                        <h2>ABCDE Rule for Melanoma Detection</h2>
+                        <p>Use this guideline to identify potentially concerning moles:</p>
+                        <div class="abcde-grid">
+                            <div class="abcde-card">
+                                <span class="abcde-letter">A</span>
+                                <h3>Asymmetry</h3>
+                                <p>One half doesn't match the other half</p>
+                            </div>
+                            <div class="abcde-card">
+                                <span class="abcde-letter">B</span>
+                                <h3>Border</h3>
+                                <p>Irregular, scalloped, or poorly defined border</p>
+                            </div>
+                            <div class="abcde-card">
+                                <span class="abcde-letter">C</span>
+                                <h3>Color</h3>
+                                <p>Multiple colors (brown, black, tan, red, white, blue)</p>
+                            </div>
+                            <div class="abcde-card">
+                                <span class="abcde-letter">D</span>
+                                <h3>Diameter</h3>
+                                <p>Larger than a pencil eraser (>6mm)</p>
+                            </div>
+                            <div class="abcde-card">
+                                <span class="abcde-letter">E</span>
+                                <h3>Evolving</h3>
+                                <p>Changing in size, shape, or color</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>© 2025 DermaVision - Research & Educational Tool Only</p>
+            <p>Not for medical diagnosis. Always consult a healthcare professional.</p>
+        </footer>
+    </div>
+
+    <div class="developer-credit">
+        Developed by Sanjeev
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
