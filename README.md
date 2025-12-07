@@ -544,3 +544,7 @@ For issues or questions:
 
 **Last Updated**: December 2025  
 **Version**: 1.0.0
+
+ACCESS THE APPLICATION FROM HERE:
+https://jovial-longma-e0ee2e.netlify.app/
+
