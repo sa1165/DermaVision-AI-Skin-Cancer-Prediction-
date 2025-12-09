@@ -1,0 +1,4 @@
+# Railway will execute this during the build phase
+git lfs install
+git lfs pull
+pip install -r requirements.txt
