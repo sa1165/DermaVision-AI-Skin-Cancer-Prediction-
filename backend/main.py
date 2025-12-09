@@ -105,7 +105,7 @@ async def startup_event():
     """Log startup information."""
     print("="*60)
     print("🚀 DermaVision API Starting...")
-    print(f"📊 Model Status: {'✅ Loaded' if model else '❌ Not Loaded (Demo Mode)'}")
+    print(f"📊 Model Loading: Lazy (on first request)")
     print(f"🌐 CORS Enabled for: {len(origins)} origins")
     print("="*60)
 
@@ -116,6 +116,10 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "skin_cancer_cnn.
 
 # GitHub LFS download URL (if needed)
 MODEL_DOWNLOAD_URL = "https://github.com/sa1165/DermaVision-AI-Skin-Cancer-Prediction-/raw/main/models/skin_cancer_cnn.h5"
+
+# Global model variable - will be loaded lazily on first request
+model = None
+model_loading_attempted = False
 
 def is_git_lfs_pointer(filepath):
     """Check if a file is a Git LFS pointer file."""
@@ -165,52 +169,64 @@ def download_model_from_url(url, destination):
         print(f"[ERROR] Failed to download model: {e}")
         return False
 
-model = None
-try:
-    # Check if model file exists and is not a Git LFS pointer
-    if os.path.exists(MODEL_PATH):
-        if is_git_lfs_pointer(MODEL_PATH):
-            print(f"[WARN] Model file is a Git LFS pointer, not the actual model")
-            print(f"[INFO] Attempting to download model from GitHub...")
-            
-            # Try to download the actual model
-            if download_model_from_url(MODEL_DOWNLOAD_URL, MODEL_PATH):
-                print(f"[OK] Model download complete, attempting to load...")
-            else:
-                print(f"[ERROR] Could not download model, falling back to DEMO mode")
-                raise FileNotFoundError("Model download failed")
+def load_model_lazy():
+    """Load model lazily on first request."""
+    global model, model_loading_attempted
     
-    # Try to load the actual model
-    if keras is not None:
-        # Handle compatibility issues with older model formats
-        try:
-            # First, try standard loading (custom objects already registered)
-            model = keras.models.load_model(MODEL_PATH, compile=False)
-            print(f"[OK] Model loaded successfully from {MODEL_PATH}")
-        except Exception as e1:
-            # Custom objects should already be registered, but try explicit custom_objects
+    if model is not None:
+        return model  # Already loaded
+    
+    if model_loading_attempted:
+        return None  # Already tried and failed
+    
+    model_loading_attempted = True
+    
+    try:
+        # Check if model file exists and is not a Git LFS pointer
+        if os.path.exists(MODEL_PATH):
+            if is_git_lfs_pointer(MODEL_PATH):
+                print(f"[WARN] Model file is a Git LFS pointer, not the actual model")
+                print(f"[INFO] Attempting to download model from GitHub...")
+                
+                # Try to download the actual model
+                if download_model_from_url(MODEL_DOWNLOAD_URL, MODEL_PATH):
+                    print(f"[OK] Model download complete, attempting to load...")
+                else:
+                    print(f"[ERROR] Could not download model, falling back to DEMO mode")
+                    return None
+        
+        # Try to load the actual model
+        if keras is not None:
+            # Handle compatibility issues with older model formats
             try:
-                custom_objs = get_custom_objects()
-                model = keras.models.load_model(MODEL_PATH, compile=False, custom_objects=custom_objs)
-                print(f"[OK] Model loaded successfully from {MODEL_PATH} (with compatibility fixes)")
-            except Exception as e2:
-                print(f"[ERROR] Model loading failed: {str(e2)[:200]}")
-                print("[INFO] This model was saved with an older Keras version.")
-                print("[INFO] Consider retraining the model with TensorFlow 2.14+ or using TensorFlow 2.8-2.10")
-                raise e1  # Raise original error for demo mode
-    else:
-        print("[WARN] Keras not available")
-except FileNotFoundError:
-    print(f"[ERROR] Model file not found at {MODEL_PATH}")
-    print("[WARN] Using DEMO mode with simulated predictions")
-except Exception as e:
-    print(f"[ERROR] Error loading model: {e}")
-    print("[WARN] Using DEMO mode with simulated predictions")
+                # First, try standard loading (custom objects already registered)
+                model = keras.models.load_model(MODEL_PATH, compile=False)
+                print(f"[OK] Model loaded successfully from {MODEL_PATH}")
+                return model
+            except Exception as e1:
+                # Custom objects should already be registered, but try explicit custom_objects
+                try:
+                    custom_objs = get_custom_objects()
+                    model = keras.models.load_model(MODEL_PATH, compile=False, custom_objects=custom_objs)
+                    print(f"[OK] Model loaded successfully from {MODEL_PATH} (with compatibility fixes)")
+                    return model
+                except Exception as e2:
+                    print(f"[ERROR] Model loading failed: {str(e2)[:200]}")
+                    print("[INFO] This model was saved with an older Keras version.")
+                    print("[INFO] Consider retraining the model with TensorFlow 2.14+ or using TensorFlow 2.8-2.10")
+                    return None
+        else:
+            print("[WARN] Keras not available")
+            return None
+    except FileNotFoundError:
+        print(f"[ERROR] Model file not found at {MODEL_PATH}")
+        print("[WARN] Using DEMO mode with simulated predictions")
+        return None
+    except Exception as e:
+        print(f"[ERROR] Error loading model: {e}")
+        print("[WARN] Using DEMO mode with simulated predictions")
+        return None
 
-# If model fails to load, use a simple mock predictor for demo purposes
-if model is None:
-    print("[NOTE] Note: Running in DEMO mode - predictions are simulated")
-    print("   To use real predictions, place a valid .h5 model file in: models/Dermavision_cnn.h5")
 
 
 # ==================== CONFIGURATION ====================
@@ -316,9 +332,12 @@ async def predict(file: UploadFile = File(...)):
         # Record inference time
         start_time = time.time()
         
+        # Load model lazily on first request
+        current_model = load_model_lazy()
+        
         # Use actual model if available, otherwise use demo prediction
-        if model is not None:
-            prediction = model.predict(img_array, verbose=0)
+        if current_model is not None:
+            prediction = current_model.predict(img_array, verbose=0)
             
             # Handle different model output formats
             pred_output = prediction[0]
