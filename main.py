@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
+import requests
+import shutil
+
 
 # Try importing TensorFlow/Keras - handle version differences
 try:

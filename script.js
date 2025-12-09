@@ -5,23 +5,23 @@
 const getApiBaseUrl = () => {
     const hostname = window.location.hostname;
     const port = window.location.port;
-    
+
     // Local development - auto-detect
     if (hostname === "localhost" || hostname === "127.0.0.1") {
         if (port === "3000" || port === "5500" || port === "") {
             return "http://localhost:8000";
         }
     }
-    
+
     // Production - UPDATE THIS with your backend URL
     // Example: "https://dermavision-api.railway.app"
     // Or set via Netlify environment variable and use build-time replacement
-    const PRODUCTION_API_URL = ""; // ⚠️ UPDATE THIS with your backend URL
-    
+    const PRODUCTION_API_URL = "https://web-production-90531.up.railway.app"; // ✅ Railway backend URL
+
     if (PRODUCTION_API_URL) {
         return PRODUCTION_API_URL;
     }
-    
+
     // Fallback: empty string (relative path - only works if backend is on same domain)
     return "";
 };
