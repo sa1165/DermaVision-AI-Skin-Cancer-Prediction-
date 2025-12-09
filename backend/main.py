@@ -111,14 +111,18 @@ async def startup_event():
 
 
 # ==================== MODEL LOADING ====================
-# Load the trained Keras model
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "skin_cancer_cnn.h5")
+# Paths
+BASE_DIR = os.path.dirname(__file__)
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+TFLITE_MODEL_PATH = os.path.join(MODELS_DIR, "skin_cancer_cnn.tflite")
+H5_MODEL_PATH = os.path.join(MODELS_DIR, "skin_cancer_cnn.h5")
 
-# GitHub LFS download URL (if needed)
+# GitHub LFS download URL (fallback for H5)
 MODEL_DOWNLOAD_URL = "https://github.com/sa1165/DermaVision-AI-Skin-Cancer-Prediction-/raw/main/models/skin_cancer_cnn.h5"
 
-# Global model variable - will be loaded lazily on first request
+# Global model variables
 model = None
+is_tflite = False
 model_loading_attempted = False
 
 def is_git_lfs_pointer(filepath):
@@ -170,61 +174,73 @@ def download_model_from_url(url, destination):
         return False
 
 def load_model_lazy():
-    """Load model lazily on first request."""
-    global model, model_loading_attempted
+    """Load model lazily on first request (Prioritizes TFLite)."""
+    global model, is_tflite, model_loading_attempted
     
     if model is not None:
-        return model  # Already loaded
+        return model
     
     if model_loading_attempted:
-        return None  # Already tried and failed
+        return None
     
     model_loading_attempted = True
     
+    print(f"[INFO] lazy_load triggered. Checking for models...")
+    
+    # 1. Try Loading TFLite Model (Preferred for Memory)
+    if os.path.exists(TFLITE_MODEL_PATH):
+        try:
+            print(f"[INFO] Found TFLite model at {TFLITE_MODEL_PATH}")
+            # Initialize TFLite Interpreter
+            interpreter = tf.lite.Interpreter(model_path=TFLITE_MODEL_PATH)
+            interpreter.allocate_tensors()
+            
+            model = interpreter
+            is_tflite = True
+            print(f"[OK] TFLite Model loaded successfully!")
+            print(f"[INFO] Memory usage should be minimal (~100MB)")
+            return model
+        except Exception as e:
+            print(f"[ERROR] Failed to load TFLite model: {e}")
+            print(f"[INFO] Falling back to H5 model...")
+            is_tflite = False
+    else:
+        print(f"[INFO] TFLite model not found at {TFLITE_MODEL_PATH}")
+
+    # 2. Fallback to H5 Model (Original Logic)
     try:
         # Check if model file exists and is not a Git LFS pointer
-        if os.path.exists(MODEL_PATH):
-            if is_git_lfs_pointer(MODEL_PATH):
-                print(f"[WARN] Model file is a Git LFS pointer, not the actual model")
-                print(f"[INFO] Attempting to download model from GitHub...")
+        if os.path.exists(H5_MODEL_PATH):
+            if is_git_lfs_pointer(H5_MODEL_PATH):
+                print(f"[WARN] H5 Model file is a Git LFS pointer")
+                print(f"[INFO] Attempting to download H5 model from GitHub...")
                 
-                # Try to download the actual model
-                if download_model_from_url(MODEL_DOWNLOAD_URL, MODEL_PATH):
-                    print(f"[OK] Model download complete, attempting to load...")
+                if download_model_from_url(MODEL_DOWNLOAD_URL, H5_MODEL_PATH):
+                    print(f"[OK] Download complete, attempting to load...")
                 else:
-                    print(f"[ERROR] Could not download model, falling back to DEMO mode")
                     return None
         
-        # Try to load the actual model
+        # Load H5
         if keras is not None:
-            # Handle compatibility issues with older model formats
             try:
-                # First, try standard loading (custom objects already registered)
-                model = keras.models.load_model(MODEL_PATH, compile=False)
-                print(f"[OK] Model loaded successfully from {MODEL_PATH}")
+                model = keras.models.load_model(H5_MODEL_PATH, compile=False)
+                print(f"[OK] H5 Model loaded successfully")
                 return model
             except Exception as e1:
-                # Custom objects should already be registered, but try explicit custom_objects
                 try:
                     custom_objs = get_custom_objects()
-                    model = keras.models.load_model(MODEL_PATH, compile=False, custom_objects=custom_objs)
-                    print(f"[OK] Model loaded successfully from {MODEL_PATH} (with compatibility fixes)")
+                    model = keras.models.load_model(H5_MODEL_PATH, compile=False, custom_objects=custom_objs)
+                    print(f"[OK] H5 Model loaded with custom objects")
                     return model
                 except Exception as e2:
-                    print(f"[ERROR] Model loading failed: {str(e2)[:200]}")
-                    print("[INFO] This model was saved with an older Keras version.")
-                    print("[INFO] Consider retraining the model with TensorFlow 2.14+ or using TensorFlow 2.8-2.10")
+                    print(f"[ERROR] H5 Model loading failed: {e2}")
                     return None
         else:
             print("[WARN] Keras not available")
             return None
-    except FileNotFoundError:
-        print(f"[ERROR] Model file not found at {MODEL_PATH}")
-        print("[WARN] Using DEMO mode with simulated predictions")
-        return None
+            
     except Exception as e:
-        print(f"[ERROR] Error loading model: {e}")
-        print("[WARN] Using DEMO mode with simulated predictions")
+        print(f"[ERROR] Error loading H5 model: {e}")
         return None
 
 
@@ -337,11 +353,28 @@ async def predict(file: UploadFile = File(...)):
         
         # Use actual model if available, otherwise use demo prediction
         if current_model is not None:
-            prediction = current_model.predict(img_array, verbose=0)
+            # === PREDICTION LOGIC ===
+            if is_tflite:
+                # TFLite Inference
+                input_details = current_model.get_input_details()
+                output_details = current_model.get_output_details()
+                
+                # Set input tensor
+                current_model.set_tensor(input_details[0]['index'], img_array)
+                
+                # Run inference
+                current_model.invoke()
+                
+                # Get output tensor
+                result = current_model.get_tensor(output_details[0]['index'])
+                pred_output = result[0] # Single batch
+                
+            else:
+                # Keras Inference
+                prediction = current_model.predict(img_array, verbose=0)
+                pred_output = prediction[0]
             
-            # Handle different model output formats
-            pred_output = prediction[0]
-            
+            # === PROCESS OUTPUT ===
             # Check if model outputs sigmoid (single value) or softmax (2 values)
             if len(pred_output) == 1:
                 # SIGMOID output: single value represents probability of Malignant (class 1)
@@ -364,7 +397,7 @@ async def predict(file: UploadFile = File(...)):
                 # Confidence is the probability of the predicted class
                 confidence_score = malignant_prob if predicted_class == 1 else benign_prob
             
-            mode = "production"
+            mode = "production (TFLite)" if is_tflite else "production (Keras)"
         else:
             # Demo mode: Generate random realistic prediction
             malignant_prob = round(random.uniform(0.0, 1.0), 4)
@@ -414,7 +447,7 @@ async def info():
         "model_input_size": INPUT_SIZE,
         "classes": CLASS_NAMES,
         "confidence_thresholds": CONFIDENCE_THRESHOLDS,
-        "model_path": MODEL_PATH,
+        "model_type": "TFLite" if is_tflite else "Keras H5",
         "model_loaded": model is not None,
         "disclaimer": DISCLAIMER
     }
@@ -434,7 +467,8 @@ if __name__ == "__main__":
     print("\n" + "="*60)
     print("DermaVision Backend Server")
     print("="*60)
-    print(f"Model Path: {MODEL_PATH}")
-    print(f"Model Loaded: {'[OK]' if model else '[ERROR]'}")
+    print(f"TFLite Path: {TFLITE_MODEL_PATH}")
+    print(f"H5 Path: {H5_MODEL_PATH}")
+    print(f"Model Loaded: {'[OK]' if model else '[NO]'}")
     print("Start with: uvicorn main:app --reload --host 0.0.0.0 --port 8000")
     print("="*60 + "\n")
