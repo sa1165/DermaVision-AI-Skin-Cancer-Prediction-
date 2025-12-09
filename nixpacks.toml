@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ['git', 'git-lfs']
+
+[phases.build]
+cmds = [
+  'git lfs install --local',
+  'git lfs pull'
+]
+
