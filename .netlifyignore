@@ -1,0 +1,10 @@
+# Ignore backend directory and Python files
+backend/
+*.py
+requirements.txt
+runtime.txt
+Procfile
+.python-version
+__pycache__/
+*.pyc
+.env
