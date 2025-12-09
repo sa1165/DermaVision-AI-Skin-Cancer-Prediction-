@@ -1,5 +1,9 @@
 # 🔬 DermaVision - Skin Lesion Classifier
 
+ACCESS FROM HERE👇
+https://symphonious-quokka-4f89b1.netlify.app/
+
+
 A **research and educational** web application for binary skin lesion classification (Benign vs Malignant) using a trained CNN model.
 
 > ⚠️ **IMPORTANT DISCLAIMER**: DermaVision is **NOT a medical device** and cannot be used for medical diagnosis or treatment decisions. Always consult a qualified dermatologist for any skin concerns.
@@ -546,5 +550,6 @@ For issues or questions:
 **Version**: 1.0.0
 
 ACCESS THE APPLICATION FROM HERE:
-https://jovial-longma-e0ee2e.netlify.app/
+https://symphonious-quokka-4f89b1.netlify.app/
+
 
