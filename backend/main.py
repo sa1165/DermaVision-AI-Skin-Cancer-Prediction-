@@ -104,8 +104,72 @@ app.add_middleware(
 # Load the trained Keras model
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "skin_cancer_cnn.h5")
 
+# GitHub LFS download URL (if needed)
+MODEL_DOWNLOAD_URL = "https://github.com/sa1165/DermaVision-AI-Skin-Cancer-Prediction-/raw/main/models/skin_cancer_cnn.h5"
+
+def is_git_lfs_pointer(filepath):
+    """Check if a file is a Git LFS pointer file."""
+    try:
+        if not os.path.exists(filepath):
+            return False
+        
+        # Git LFS pointer files are small (< 1KB) and start with "version https://git-lfs.github.com"
+        file_size = os.path.getsize(filepath)
+        if file_size < 1024:  # Less than 1KB
+            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                first_line = f.readline()
+                if 'git-lfs' in first_line or 'version https' in first_line:
+                    return True
+        return False
+    except Exception:
+        return False
+
+def download_model_from_url(url, destination):
+    """Download model file from URL with progress."""
+    try:
+        print(f"[INFO] Downloading model from {url}...")
+        print(f"[INFO] This may take a few minutes (model is ~500MB)...")
+        
+        response = requests.get(url, stream=True, timeout=300)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+        
+        # Create models directory if it doesn't exist
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        
+        with open(destination, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        percent = (downloaded / total_size) * 100
+                        if downloaded % (10 * 1024 * 1024) == 0:  # Log every 10MB
+                            print(f"[INFO] Downloaded {downloaded / (1024*1024):.1f}MB / {total_size / (1024*1024):.1f}MB ({percent:.1f}%)")
+        
+        print(f"[OK] Model downloaded successfully to {destination}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to download model: {e}")
+        return False
+
 model = None
 try:
+    # Check if model file exists and is not a Git LFS pointer
+    if os.path.exists(MODEL_PATH):
+        if is_git_lfs_pointer(MODEL_PATH):
+            print(f"[WARN] Model file is a Git LFS pointer, not the actual model")
+            print(f"[INFO] Attempting to download model from GitHub...")
+            
+            # Try to download the actual model
+            if download_model_from_url(MODEL_DOWNLOAD_URL, MODEL_PATH):
+                print(f"[OK] Model download complete, attempting to load...")
+            else:
+                print(f"[ERROR] Could not download model, falling back to DEMO mode")
+                raise FileNotFoundError("Model download failed")
+    
     # Try to load the actual model
     if keras is not None:
         # Handle compatibility issues with older model formats
@@ -137,6 +201,7 @@ except Exception as e:
 if model is None:
     print("[NOTE] Note: Running in DEMO mode - predictions are simulated")
     print("   To use real predictions, place a valid .h5 model file in: models/Dermavision_cnn.h5")
+
 
 # ==================== CONFIGURATION ====================
 INPUT_SIZE = 224
