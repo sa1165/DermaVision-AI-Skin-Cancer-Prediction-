@@ -100,6 +100,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information."""
+    print("="*60)
+    print("🚀 DermaVision API Starting...")
+    print(f"📊 Model Status: {'✅ Loaded' if model else '❌ Not Loaded (Demo Mode)'}")
+    print(f"🌐 CORS Enabled for: {len(origins)} origins")
+    print("="*60)
+
+
 # ==================== MODEL LOADING ====================
 # Load the trained Keras model
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "skin_cancer_cnn.h5")
